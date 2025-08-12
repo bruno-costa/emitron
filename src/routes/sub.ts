@@ -11,13 +11,10 @@ export function registerSubRoutes(app: Elysia) {
         // Garante inscrição no canal Redis (se ainda não inscrito)
         await redisSubscribe(queue)
 
-        set.headers = {
-            ...set.headers,
-            'Content-Type': 'text/event-stream; charset=utf-8',
-            'Cache-Control': 'no-cache, no-transform',
-            'Connection': 'keep-alive',
-            'X-Accel-Buffering': 'no',
-        }
+        set.headers['Content-Type'] = 'text/event-stream; charset=utf-8';
+        set.headers['Cache-Control'] = 'no-cache, no-transform';
+        set.headers['Connection'] = 'keep-alive';
+        set.headers['X-Accel-Buffering'] = 'no';
 
         const enc = new TextEncoder()
         let hb: Timer | number | undefined
