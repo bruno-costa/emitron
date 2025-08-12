@@ -1,0 +1,1 @@
+export type Sender = (payload: string) => void
