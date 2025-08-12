@@ -22,21 +22,12 @@ Feito com [Bun](https://bun.sh/) + [Elysia](https://elysiajs.com/), suporta múl
 
 ## 📦 Instalação
 
-### 1. Clonar o repositório
+### Clonar o repositório
 
 ```bash
 git clone https://github.com/bruno-costa/emitron.git
 cd emitron
 ```
-
-### 2. Rodar localmente com Bun
-
-```bash
-bun install
-bun run dev
-```
-
-O servidor subirá em [http://localhost:3000](http://localhost:3000).
 
 ---
 
@@ -46,13 +37,14 @@ O servidor subirá em [http://localhost:3000](http://localhost:3000).
 docker compose up -d
 ```
 
+O servidor subirá em [http://localhost:3000](http://localhost:3000).
+
 ---
 
 ## ⚙️ Variáveis de ambiente
 
 | Variável         | Padrão               | Descrição                                 |
 | ---------------- | -------------------- | ----------------------------------------- |
-| `PORT`           | `3000`               | Porta do servidor                         |
 | `REDIS_URL`      | `redis://redis:6379` | URL de conexão do Redis                   |
 | `CHANNEL_PREFIX` | `emitron`            | Prefixo dos canais no Redis               |
 | `HEARTBEAT_MS`   | `15000`              | Intervalo do heartbeat SSE (ms)           |
@@ -166,6 +158,33 @@ await fetch('http://localhost:3000/pub/news', {
 
 O **emitron** usa o **Redis Pub/Sub** para propagar mensagens entre instâncias.
 Basta colocar várias instâncias atrás de um Load Balancer, apontando para o mesmo Redis.
+
+---
+
+## 🛠️ Ambiente de desenvolvimento com override
+
+Para facilitar o desenvolvimento local, crie um arquivo `docker-compose.local.yml` com o seguinte conteúdo:
+
+```yml
+version: "3.8"
+services:
+  emitron:
+    command: bun run dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./src:/app/src
+      - /app/node_modules
+      - /app/bun.lockb
+```
+
+E rode o projeto com:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+```
+
+Isso irá iniciar o servidor no modo **dev** com hot reload e mapeamento de volumes para seu código local.
 
 ---
 
