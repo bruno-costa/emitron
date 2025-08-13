@@ -3,6 +3,8 @@ import cors from '@elysiajs/cors'
 import { registerSubRoutes } from './routes/sub'
 import { registerPubRoutes } from './routes/pub'
 import { registerHealthRoutes } from './routes/health'
+import { registerBufferRoutes } from './routes/buffer'
+
 
 export function buildServer() {
     const app = new Elysia()
@@ -11,6 +13,7 @@ export function buildServer() {
     registerSubRoutes(app)
     registerPubRoutes(app)
     registerHealthRoutes(app)
+    registerBufferRoutes(app)
 
     return app
 }

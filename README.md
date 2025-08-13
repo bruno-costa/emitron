@@ -13,6 +13,7 @@ Feito com [Bun](https://bun.sh/) + [Elysia](https://elysiajs.com/), suporta múl
 
 * **Publish/Subscribe** por fila usando SSE
 * Escalável via **Redis Pub/Sub**
+* **Replay Buffer** persistente no Redis (últimas N mensagens)
 * **CORS** habilitado (pronto para browser)
 * Modular e fácil de estender
 * **Heartbeat** automático para evitar timeouts
@@ -22,12 +23,22 @@ Feito com [Bun](https://bun.sh/) + [Elysia](https://elysiajs.com/), suporta múl
 
 ## 📦 Instalação
 
-### Clonar o repositório
+### 1. Clonar o repositório
 
 ```bash
 git clone https://github.com/bruno-costa/emitron.git
 cd emitron
 ```
+
+### 2. Rodar localmente com Bun
+
+```bash
+export REDIS_URL=redis://localhost:6379
+bun install
+bun run dev
+```
+
+O servidor subirá em [http://localhost:3000](http://localhost:3000).
 
 ---
 
@@ -37,18 +48,19 @@ cd emitron
 docker compose up -d
 ```
 
-O servidor subirá em [http://localhost:3000](http://localhost:3000).
+Isso inicia o servidor em [http://localhost:3000](http://localhost:3000). 
 
 ---
 
 ## ⚙️ Variáveis de ambiente
 
-| Variável         | Padrão               | Descrição                                 |
-| ---------------- | -------------------- | ----------------------------------------- |
-| `REDIS_URL`      | `redis://redis:6379` | URL de conexão do Redis                   |
-| `CHANNEL_PREFIX` | `emitron`            | Prefixo dos canais no Redis               |
-| `HEARTBEAT_MS`   | `15000`              | Intervalo do heartbeat SSE (ms)           |
-| `RETRY_MS`       | `10000`              | Tempo de reconexão do SSE no cliente (ms) |
+| Variável         | Padrão               | Descrição                                       |
+| ---------------- | -------------------- | ----------------------------------------------- |
+| `REDIS_URL`      | `redis://redis:6379` | URL de conexão do Redis                         |
+| `CHANNEL_PREFIX` | `emitron`            | Prefixo dos canais no Redis                     |
+| `HEARTBEAT_MS`   | `15000`              | Intervalo do heartbeat SSE (ms)                 |
+| `RETRY_MS`       | `10000`              | Tempo de reconexão do SSE no cliente (ms)       |
+| `REPLAY_MAX`     | `100`                | Máximo de mensagens mantidas no buffer por fila |
 
 ---
 
@@ -60,12 +72,14 @@ O servidor subirá em [http://localhost:3000](http://localhost:3000).
 GET /sub/:queue
 ```
 
-Abre uma conexão SSE para receber mensagens publicadas na fila `:queue`.
+Parâmetros de query:
+
+* `replay=N` → envia as últimas N mensagens armazenadas no buffer dessa fila antes de começar o stream ao vivo (limite: `REPLAY_MAX`).
 
 Exemplo:
 
 ```bash
-curl -N http://localhost:3000/sub/news
+curl -N "http://localhost:3000/sub/news?replay=10"
 ```
 
 ---
@@ -96,6 +110,28 @@ curl -X POST http://localhost:3000/pub/news \
 
 ---
 
+### **Limpar buffer de uma fila**
+
+```
+DELETE /buffer/:queue
+```
+
+Remove o **replay buffer** (últimas mensagens) do tópico informado. Útil para zerar o histórico antes de um teste ou após um deploy.
+
+Exemplo:
+
+```bash
+curl -X DELETE http://localhost:3000/buffer/news
+```
+
+Resposta típica:
+
+```json
+{ "ok": true, "queue": "news", "removed": true, "message": "Buffer de \"news\" limpo" }
+```
+
+---
+
 ### **Health check**
 
 ```
@@ -117,7 +153,7 @@ Retorna o status do servidor e do Redis:
 
 ```html
 <script>
-  const es = new EventSource('http://localhost:3000/sub/news')
+  const es = new EventSource('http://localhost:3000/sub/news?replay=5')
 
   es.onmessage = (e) => {
     const payload = JSON.parse(e.data)
@@ -138,17 +174,17 @@ Retorna o status do servidor e do Redis:
 import EventSource from 'eventsource'
 import fetch from 'node-fetch'
 
-const es = new EventSource('http://localhost:3000/sub/news')
+const es = new EventSource('http://localhost:3000/sub/news?replay=5')
 
 es.onmessage = (e) => {
-  console.log('Mensagem recebida:', JSON.parse(e.data))
+    console.log('Mensagem recebida:', JSON.parse(e.data))
 }
 
 // Publicar uma mensagem
 await fetch('http://localhost:3000/pub/news', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ data: { msg: 'Hello subscribers' } })
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: { msg: 'Hello subscribers' } })
 })
 ```
 
@@ -156,14 +192,14 @@ await fetch('http://localhost:3000/pub/news', {
 
 ## 📡 Escalando com múltiplas instâncias
 
-O **emitron** usa o **Redis Pub/Sub** para propagar mensagens entre instâncias.
+O **emitron** usa o **Redis Pub/Sub** para propagar mensagens entre instâncias e armazena o buffer de replay diretamente no Redis.
 Basta colocar várias instâncias atrás de um Load Balancer, apontando para o mesmo Redis.
 
 ---
 
 ## 🛠️ Ambiente de desenvolvimento com override
 
-Para facilitar o desenvolvimento local, crie um arquivo `docker-compose.local.yml` com o seguinte conteúdo:
+Para facilitar o desenvolvimento local, crie um arquivo `docker-compose.local.yml` (que deve estar no `.gitignore`) com o seguinte conteúdo:
 
 ```yml
 version: "3.8"

@@ -1,6 +1,7 @@
 import Redis from 'ioredis'
 import { CHANNEL_PREFIX, REDIS_URL } from './config'
 import { broadcast } from './queues'
+import { pushReplay } from './replay'
 
 const redisPub = new Redis(REDIS_URL)
 const redisSub = new Redis(REDIS_URL)
@@ -31,6 +32,7 @@ export async function unsubscribe(queue: string) {
 
 redisSub.on('message', (channel, message) => {
     const queue = channel.slice(channel.indexOf(':') + 1)
+    pushReplay(queue, message).catch(() => {})
     broadcast(queue, message)
 })
 

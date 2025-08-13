@@ -1,12 +1,16 @@
 import type { Elysia } from 'elysia'
-import { HEARTBEAT_MS, RETRY_MS } from '../config'
+import { HEARTBEAT_MS, REPLAY_MAX, RETRY_MS } from '../config'
 import { addSubscriber, removeSubscriber, hasSubscribers } from '../queues'
 import { subscribe as redisSubscribe, unsubscribe as redisUnsubscribe } from '../redis'
 import type { Sender } from '../types'
+import {getRecent} from "../replay";
 
 export function registerSubRoutes(app: Elysia) {
-    return app.get('/sub/:queue', async ({ params, request, set }) => {
+    return app.get('/sub/:queue', async ({ params, request, set, query }) => {
         const { queue } = params
+
+        const replayParam = Math.max(0, Number(query.replay) >> 0)
+        const replayCount = Math.min(replayParam, REPLAY_MAX)
 
         // Garante inscrição no canal Redis (se ainda não inscrito)
         await redisSubscribe(queue)
@@ -21,12 +25,19 @@ export function registerSubRoutes(app: Elysia) {
         let sender: Sender | null = null
 
         const stream = new ReadableStream({
-            start(controller) {
+            async start(controller) {
                 // dica ao client para reconectar
                 controller.enqueue(enc.encode(`retry: ${RETRY_MS}\n\n`))
 
                 sender = (payload: string) => {
                     controller.enqueue(enc.encode(`data: ${payload}\n\n`))
+                }
+
+                if (replayCount > 0) {
+                    const recents = await getRecent(queue, replayCount)
+                    for (const msg of recents) {
+                        sender(msg)
+                    }
                 }
 
                 addSubscriber(queue, sender)
